@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GrafoLab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: barra de marca · barra de herramientas con menús · lienzo SVG editable · panel de resultados debajo */
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#132039; --muted:#5a6680; --line:#d3d9e6; --grid:#e3e8f1;
+  --node:#e2ebf8; --node-stroke:#1d3a6e; --edge:#7f8aa1; --hl:#c4402f; --hl-soft:#f7ddd8; --sel:#e8a33d;
+  --accent:#2c5aa8; --accent-ink:#ffffff; --ok:#1d7a4e; --ok-soft:#dbf0e5; --bad:#b23a2d; --bad-soft:#f8e0dc;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",Arial,Helvetica,sans-serif;
+  --f-mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1422; --panel:#161f33; --ink:#e6ebf6; --muted:#98a4bf; --line:#29354f; --grid:#1b2640;
+  --node:#22335a; --node-stroke:#9cb6ea; --edge:#6b7896; --hl:#ff7b69; --hl-soft:#47241f; --sel:#f0b45a;
+  --accent:#8db0f0; --accent-ink:#0e1422; --ok:#5fd39a; --ok-soft:#173a2a; --bad:#ff8a7c; --bad-soft:#43201c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1422; --panel:#161f33; --ink:#e6ebf6; --muted:#98a4bf; --line:#29354f; --grid:#1b2640;
+  --node:#22335a; --node-stroke:#9cb6ea; --edge:#6b7896; --hl:#ff7b69; --hl-soft:#47241f; --sel:#f0b45a;
+  --accent:#8db0f0; --accent-ink:#0e1422; --ok:#5fd39a; --ok-soft:#173a2a; --bad:#ff8a7c; --bad-soft:#43201c; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-block:14px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:12px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{font-family:var(--f-display);font-size:1.7rem;margin:0;letter-spacing:.01em}
+.brand h1 span{color:var(--accent)}
+.brand p{margin:0;color:var(--muted);font-size:.9rem}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.btn{font:500 .9rem var(--f-body);color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:7px;padding:7px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn kbd{font-family:var(--f-mono);font-size:.7rem;opacity:.65}
+.btn:focus-visible,.mi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.menu{position:relative}
+.menu .list{position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px rgba(10,20,40,.18);padding:6px;min-width:250px;display:grid}
+.mi{font:500 .9rem var(--f-body);text-align:left;background:transparent;color:var(--ink);border:0;border-radius:6px;padding:8px 10px;cursor:pointer}
+.mi:hover{background:var(--node)}
+.mi small{display:block;color:var(--muted);font-size:.75rem}
+.list hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.hint{min-height:2.6em;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:.9rem;color:var(--muted)}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative}
+#svg{display:block;width:100%;height:auto;touch-action:none;user-select:none;cursor:default}
+#svg.add{cursor:crosshair} #svg.connect{cursor:pointer} #svg.erase{cursor:not-allowed}
+.stats{position:absolute;right:10px;bottom:8px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--panel);padding:2px 8px;border-radius:6px;border:1px solid var(--line)}
+.out{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.out h2{font-family:var(--f-display);font-size:1.2rem;margin:0 0 6px}
+.out p{margin:6px 0}
+.verdict{display:inline-flex;gap:6px;font-weight:700;padding:5px 12px;border-radius:999px;font-size:.92rem}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)} .verdict.no{background:var(--bad-soft);color:var(--bad)}
+.seq{font-family:var(--f-mono);font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:8px 0;overflow-wrap:anywhere}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;font-family:var(--f-mono);font-size:.92rem;font-variant-numeric:tabular-nums;margin:6px 0}
+th,td{border:1px solid var(--line);padding:5px 10px;text-align:center;min-width:2.4em}
+th{background:var(--node);font-family:var(--f-body);font-weight:700}
+td.one{color:var(--accent);font-weight:700} td.zero{color:var(--muted)} .sum{background:var(--hl-soft);font-weight:700}
+.empty{color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:18px;width:min(460px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(8,14,28,.45)}
+dialog h3{margin:0 0 10px;font-family:var(--f-display);font-size:1.2rem}
+dialog label{display:grid;gap:4px;font-size:.85rem;color:var(--muted);margin-bottom:10px}
+dialog input,dialog textarea,dialog select{font:500 1rem var(--f-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;width:100%}
+dialog textarea{min-height:170px}
+.row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:8px;font-size:.9rem;z-index:50}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <div class="brand">
+    <h1>Grafo<span>Lab</span></h1>
+    <p>Editor y analizador de grafos · matrices, recorridos de Euler y Hamilton, rutas de costo mínimo</p>
+  </div>
+
+  <div class="toolbar" role="toolbar" aria-label="Herramientas">
+    <div class="menu" id="m-grafo"><button class="btn" data-menu="m-grafo" id="b-grafo">Grafo ▾</button>
+      <div class="list" hidden>
+        <button class="mi" data-act="new">Nuevo grafo<small>Borra el lienzo</small></button>
+        <button class="mi" data-act="fromMatrix">Crear desde matriz de adyacencia<small>Pega la matriz y se dibuja el grafo</small></button>
+        <hr>
+        <button class="mi" data-act="showAdj">Ver matriz de adyacencia</button>
+        <button class="mi" data-act="showInc">Ver matriz de incidencia</button>
+        <button class="mi" data-act="showW">Ver matriz de pesos</button>
+        <button class="mi" data-act="showDeg">Ver grados de los vértices</button>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <button class="btn" data-mode="move" id="b-move">Mover <kbd>M</kbd></button>
+    <button class="btn" data-mode="add" id="b-add">+ Agregar vértice <kbd>V</kbd></button>
+    <button class="btn" data-mode="connect" id="b-connect">Conectar vértices <kbd>E</kbd></button>
+    <button class="btn" data-mode="erase" id="b-erase">Eliminar <kbd>R</kbd></button>
+    <button class="btn" id="b-undo">↶ Deshacer</button>
+    <div class="sep"></div>
+    <div class="menu" id="m-alg"><button class="btn" data-menu="m-alg" id="b-alg">Algoritmos ▾</button>
+      <div class="list" hidden>
+        <button class="mi" data-act="hamPath">Buscar camino de Hamilton</button>
+        <button class="mi" data-act="hamCycle">Buscar circuito de Hamilton</button>
+        <button class="mi" data-act="eulerPath">Buscar camino de Euler</button>
+        <button class="mi" data-act="eulerCycle">Buscar circuito de Euler</button>
+        <hr>
+        <button class="mi" data-act="dijkstra">Ruta de costo mínimo (Dijkstra)<small>Elige origen y destino</small></button>
+        <button class="mi" data-act="hamThrough">Circuito de Hamilton de costo mínimo<small>Desde un vértice, pasando por otro</small></button>
+        <hr>
+        <button class="mi" data-act="clearHl">Quitar resaltado</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">Modo Mover: arrastra los vértices. Doble clic en un vértice para renombrarlo y en una arista para editar su etiqueta y peso.</div>
+
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 1000 560" aria-label="Lienzo del grafo" role="application"></svg>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <section class="out" id="out" aria-live="polite"></section>
+</div>
+
+<dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
+
+<script>
+// ===== estado =====
+let G={nodes:[],edges:[],nid:1,eid:1};
+let mode='move', pendingConnect=null, hl=null, undo=[];
+const svg=document.getElementById('svg'), NS='http://www.w3.org/2000/svg';
+const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function save(){try{localStorage.setItem('grafolab',JSON.stringify(G));}catch(e){}}
+function load(){try{const s=localStorage.getItem('grafolab'); if(s){G=JSON.parse(s);return true;}}catch(e){} return false;}
+function snapshot(){undo.push(JSON.stringify(G)); if(undo.length>60)undo.shift();}
+function nextName(){const used=new Set(G.nodes.map(n=>n.name));for(const L of LETTERS)if(!used.has(L))return L;return 'V'+G.nid;}
+const byId=id=>G.nodes.find(n=>n.id===id);
+const nm=id=>byId(id).name;
+
+// ===== dibujo =====
+function el(t,a,p,txt){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;if(p)p.appendChild(e);return e;}
+function draw(){
+  svg.innerHTML='';
+  const defs=el('defs',{},svg);
+  const pat=el('pattern',{id:'grid',width:40,height:40,patternUnits:'userSpaceOnUse'},defs);
+  el('path',{d:'M40 0 L0 0 0 40',fill:'none',stroke:'var(--grid)','stroke-width':1},pat);
+  const mk=el('marker',{id:'arr',viewBox:'0 0 10 10',refX:5,refY:5,markerWidth:3.6,markerHeight:3.6,orient:'auto-start-reverse'},defs);
+  el('path',{d:'M0,0 L10,5 L0,10 z',fill:'var(--hl)'},mk);
+  el('rect',{x:0,y:0,width:1000,height:560,fill:'url(#grid)'},svg);
+  const steps=new Map();
+  if(hl&&hl.seq){const used=new Set();for(let i=0;i<hl.seq.length-1;i++){const e=findEdge(hl.seq[i],hl.seq[i+1],hl.trail?used:null);if(!e)continue;used.add(e.id);if(!steps.has(e.id))steps.set(e.id,[]);steps.get(e.id).push({k:i+1,from:hl.seq[i],to:hl.seq[i+1]});}}
+  for(const e of G.edges){
+    const a=byId(e.a), b=byId(e.b), on=steps.has(e.id);
+    const g=el('g',{'data-edge':e.id,style:'cursor:pointer'},svg);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'transparent','stroke-width':16},g);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:on?'var(--hl)':'var(--edge)','stroke-width':on?5:2.4,'stroke-linecap':'round'},g);
+    if(on&&!hl.trail){const s=steps.get(e.id)[0],p=byId(s.from),q=byId(s.to);
+      el('line',{x1:p.x+(q.x-p.x)*.56,y1:p.y+(q.y-p.y)*.56,x2:p.x+(q.x-p.x)*.7,y2:p.y+(q.y-p.y)*.7,stroke:'var(--hl)','stroke-width':5,'marker-end':'url(#arr)'},g);}
+    let t=e.label||''; if(e.w!=null&&e.w!=='') t+=(t?' | ':'')+e.w;
+    if(on&&hl.trail) t+=(t?' · ':'')+'paso '+steps.get(e.id).map(s=>s.k).join(',');
+    if(t){const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,w=t.length*8+12;
+      el('rect',{x:mx-w/2,y:my-12,width:w,height:24,rx:6,fill:'var(--panel)',stroke:on?'var(--hl)':'var(--line)'},g);
+      el('text',{x:mx,y:my+5,'text-anchor':'middle','font-family':'IBM Plex Mono, monospace','font-size':14,'font-weight':on?700:500,fill:on?'var(--hl)':'var(--muted)'},g,t);}
+  }
+  const ends=hl&&hl.seq?new Set([hl.seq[0],hl.seq[hl.seq.length-1]]):new Set();
+  for(const n of G.nodes){
+    const g=el('g',{'data-node':n.id,style:'cursor:'+(mode==='move'?'grab':'pointer')},svg);
+    const isSel=pendingConnect===n.id, end=ends.has(n.id);
+    el('circle',{cx:n.x,cy:n.y,r:26,fill:end?'var(--hl-soft)':'var(--node)',stroke:isSel?'var(--sel)':end?'var(--hl)':'var(--node-stroke)','stroke-width':isSel?5:3},g);
+    el('text',{x:n.x,y:n.y+7,'text-anchor':'middle','font-family':'IBM Plex Sans, Arial, sans-serif','font-size':n.name.length>2?16:20,'font-weight':700,fill:'var(--ink)'},g,n.name);
+  }
+  if(!G.nodes.length){el('text',{x:500,y:280,'text-anchor':'middle','font-family':'IBM Plex Sans, Arial','font-size':18,fill:'var(--muted)'},svg,'Lienzo vacío: elige «+ Agregar vértice» y haz clic aquí, o usa Grafo ▸ Crear desde matriz');}
+  const d=degrees();
+  document.getElementById('stats').textContent=`|V| = ${G.nodes.length} · |E| = ${G.edges.length} · Σ grados = ${Object.values(d).reduce((a,b)=>a+b,0)}`;
+}
+
+// ===== interacción =====
+function pt(ev){const p=svg.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());}
+let drag=null;
+svg.addEventListener('pointerdown',ev=>{
+  const nEl=ev.target.closest('[data-node]'), eEl=ev.target.closest('[data-edge]');
+  const p=pt(ev);
+  if(mode==='move'&&nEl){snapshot();drag={id:+nEl.dataset.node};svg.setPointerCapture(ev.pointerId);return;}
+  if(mode==='add'&&!nEl&&!eEl){snapshot();const name=nextName();G.nodes.push({id:G.nid++,name,x:Math.round(p.x),y:Math.round(p.y)});hl=null;commit();return;}
+  if(mode==='connect'&&nEl){const id=+nEl.dataset.node;
+    if(pendingConnect==null){pendingConnect=id;draw();setHint(`Elegiste ${nm(id)}. Ahora haz clic en el segundo vértice.`);return;}
+    if(pendingConnect===id){pendingConnect=null;draw();return;}
+    if(findEdge(pendingConnect,id)){toast('Esos vértices ya están conectados');pendingConnect=null;draw();return;}
+    snapshot();const e={id:G.eid++,a:pendingConnect,b:id,label:'e'+(G.edges.length+1),w:null};G.edges.push(e);pendingConnect=null;hl=null;commit();
+    setHint(`Arista ${e.label} = {${nm(e.a)}, ${nm(e.b)}} creada. Doble clic sobre ella para cambiar su etiqueta o peso.`);return;}
+  if(mode==='erase'){
+    if(nEl){snapshot();const id=+nEl.dataset.node;G.nodes=G.nodes.filter(n=>n.id!==id);G.edges=G.edges.filter(e=>e.a!==id&&e.b!==id);hl=null;commit();}
+    else if(eEl){snapshot();const id=+eEl.dataset.edge;G.edges=G.edges.filter(e=>e.id!==id);hl=null;commit();}
+  }
+});
+svg.addEventListener('pointermove',ev=>{if(!drag)return;const p=pt(ev),n=byId(drag.id);n.x=Math.max(30,Math.min(970,Math.round(p.x)));n.y=Math.max(30,Math.min(530,Math.round(p.y)));draw();});
+svg.addEventListener('pointerup',()=>{if(drag){drag=null;save();}});
+svg.addEventListener('dblclick',ev=>{
+  const nEl=ev.target.closest('[data-node]'), eEl=ev.target.closest('[data-edge]');
+  if(nEl){const n=byId(+nEl.dataset.node);
+    ask('Renombrar vértice',[{id:'name',label:'Nombre del vértice',value:n.name}],v=>{const s=v.name.trim();if(!s)return;
+      if(G.nodes.some(x=>x!==n&&x.name===s)){toast('Ya existe un vértice con ese nombre');return;} snapshot();n.name=s;commit();});}
+  else if(eEl){const e=G.edges.find(x=>x.id===+eEl.dataset.edge);
+    ask(`Arista {${nm(e.a)}, ${nm(e.b)}}`,[{id:'label',label:'Etiqueta (ej. e1)',value:e.label||''},{id:'w',label:'Peso o costo (vacío = sin peso)',value:e.w??''}],v=>{
+      snapshot();e.label=v.label.trim();const w=v.w.trim();e.w=w===''?null:(isNaN(+w)?null:+w);commit();});}
+});
+function setMode(m){mode=m;pendingConnect=null;
+  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===m));
+  svg.setAttribute('class',m==='move'?'':m);
+  setHint({move:'Modo Mover: arrastra los vértices. Doble clic en un vértice para renombrarlo y en una arista para editar su etiqueta y peso.',
+           add:'Modo Agregar vértice: haz clic en un espacio vacío del lienzo. Los nombres se asignan A, B, C… (doble clic para cambiarlos en modo Mover).',
+           connect:'Modo Conectar: haz clic en un vértice y luego en otro para crear la arista (no dirigida).',
+           erase:'Modo Eliminar: haz clic en un vértice o en una arista para borrarlo.'}[m]);draw();}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+document.getElementById('b-undo').onclick=()=>{if(!undo.length)return toast('No hay nada que deshacer');G=JSON.parse(undo.pop());hl=null;commit();};
+document.addEventListener('keydown',ev=>{if(document.getElementById('dlg').open||/INPUT|TEXTAREA/.test(ev.target.tagName))return;
+  const k=ev.key.toLowerCase(); if(k==='m')setMode('move'); if(k==='v')setMode('add'); if(k==='e')setMode('connect'); if(k==='r')setMode('erase');
+  if((ev.ctrlKey||ev.metaKey)&&k==='z'){ev.preventDefault();document.getElementById('b-undo').click();}});
+function setHint(t){document.getElementById('hint').textContent=t;}
+function commit(){save();draw();}
+let tt;function toast(t){document.querySelectorAll('.toast').forEach(x=>x.remove());const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);clearTimeout(tt);tt=setTimeout(()=>d.remove(),2400);}
+
+// menús
+document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const l=document.querySelector('#'+b.dataset.menu+' .list');const was=!l.hidden;closeMenus();l.hidden=was;});
+function closeMenus(){document.querySelectorAll('.menu .list').forEach(l=>l.hidden=true);}
+document.addEventListener('click',closeMenus);
+document.querySelectorAll('.mi').forEach(b=>b.onclick=()=>{closeMenus();ACTIONS[b.dataset.act]();});
+
+// diálogo genérico
+function ask(title,fields,cb,submitText='Aceptar'){
+  const f=document.getElementById('dlgForm');
+  f.innerHTML=`<h3>${title}</h3>`+fields.map(x=>`<label>${x.label}${x.type==='textarea'?`<textarea id="f-${x.id}">${x.value||''}</textarea>`:x.type==='select'?`<select id="f-${x.id}">${x.options.map(o=>`<option ${o===x.value?'selected':''}>${o}</option>`).join('')}</select>`:`<input id="f-${x.id}" value="${String(x.value??'').replace(/"/g,'&quot;')}">`}</label>`).join('')+
+    `<div class="row"><button class="btn" value="cancel" id="dlg-cancel">Cancelar</button><button class="btn primary" value="ok" id="dlg-ok">${submitText}</button></div>`;
+  const d=document.getElementById('dlg'); d.showModal();
+  d.onclose=()=>{if(d.returnValue==='ok'){const v={};fields.forEach(x=>v[x.id]=document.getElementById('f-'+x.id).value);cb(v);}};
+  setTimeout(()=>{const first=f.querySelector('input,textarea,select');if(first){first.focus();first.select&&first.select();}},30);
+}
+
+// ===== teoría de grafos =====
+function findEdge(u,v,used){return G.edges.find(e=>((e.a===u&&e.b===v)||(e.a===v&&e.b===u))&&!(used&&used.has(e.id)));}
+function adjList(){const A={};G.nodes.forEach(n=>A[n.id]=[]);G.edges.forEach(e=>{A[e.a].push({to:e.b,e});A[e.b].push({to:e.a,e});});
+  Object.values(A).forEach(l=>l.sort((x,y)=>nm(x.to).localeCompare(nm(y.to),'es',{numeric:true})));return A;}
+function degrees(){const d={};G.nodes.forEach(n=>d[n.id]=0);G.edges.forEach(e=>{d[e.a]++;d[e.b]++;});return d;}
+function connected(){if(!G.nodes.length)return false;const A=adjList(),s=new Set([G.nodes[0].id]),st=[G.nodes[0].id];while(st.length){const u=st.pop();for(const {to} of A[u])if(!s.has(to)){s.add(to);st.push(to);}}return s.size===G.nodes.length;}
+function order(){return [...G.nodes].sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true})).map(n=>n.id);}
+function hamilton(cycle,start){const A=adjList(),n=G.nodes.length,res=[];if(!n)return res;
+  const starts=start!=null?[start]:order();
+  for(const s of starts){const path=[s],used=new Set([s]);
+    (function rec(){const u=path[path.length-1];if(res.length>2000)return;
+      if(path.length===n){if(!cycle||A[u].some(x=>x.to===s))res.push(cycle?[...path,s]:[...path]);return;}
+      for(const {to} of A[u])if(!used.has(to)){used.add(to);path.push(to);rec();path.pop();used.delete(to);}})();
+    if(cycle&&start==null)break;}
+  return res;}
+function eulerSearch(start,closed){const A=adjList(),m=G.edges.length,used=new Set(),path=[start];let res=null;
+  (function rec(u){if(res)return;if(used.size===m){if(!closed||u===start)res=[...path];return;}
+    for(const {to,e} of A[u])if(!used.has(e.id)){used.add(e.id);path.push(to);rec(to);path.pop();used.delete(e.id);if(res)return;}})(start);return res;}
+function cost(seq){let c=0;for(let i=0;i<seq.length-1;i++){const e=findEdge(seq[i],seq[i+1]);c+=(e&&e.w!=null)?e.w:1;}return c;}
+const hasW=()=>G.edges.some(e=>e.w!=null);
+const arrow=s=>s.map(nm).join(' → ');
+
+// ===== salida =====
+const out=document.getElementById('out');
+function need(n){if(G.nodes.length<n){out.innerHTML=`<h2>Falta el grafo</h2><p class="empty">Primero agrega vértices y aristas en el lienzo.</p>`;return false;}return true;}
+function degLine(){const d=degrees();return order().map(id=>`d(${nm(id)}) = ${d[id]}`).join(', ');}
+function matrix(title,rows,cols,cell,opts={}){
+  let h=`<h2>${title}</h2><div class="tblwrap"><table><tr><th>${opts.corner||''}</th>${cols.map(c=>`<th>${c}</th>`).join('')}${opts.rowSum?'<th class="sum">Σ fila</th>':''}</tr>`;
+  rows.forEach((r,i)=>{let s=0;h+=`<tr><th>${r}</th>`;cols.forEach((c,j)=>{const v=cell(i,j);if(typeof v==='number')s+=v;h+=`<td class="${v===1||(typeof v==='number'&&v>1)?'one':'zero'}">${v}</td>`;});if(opts.rowSum)h+=`<td class="sum">${s}</td>`;h+='</tr>';});
+  if(opts.colSum){h+=`<tr><th class="sum">Σ col.</th>`+cols.map((c,j)=>{let s=0;rows.forEach((r,i)=>s+=cell(i,j));return `<td class="sum">${s}</td>`;}).join('')+(opts.rowSum?'<td class="sum"></td>':'')+'</tr>';}
+  return h+'</table></div>';}
+const ACTIONS={
+  new(){if(G.nodes.length)snapshot();G={nodes:[],edges:[],nid:1,eid:1};hl=null;out.innerHTML='';commit();setMode('add');},
+  fromMatrix(){ask('Crear grafo desde matriz de adyacencia',[
+      {id:'names',label:'Nombres de los vértices, separados por coma (opcional)',value:''},
+      {id:'m',label:'Matriz (una fila por línea; 0 = sin arista, 1 = arista, otro número = peso)',type:'textarea',value:''}],v=>{
+      const rows=v.m.trim().split(/\n+/).map(r=>r.trim().split(/[\s,;]+/).filter(Boolean).map(Number));
+      const n=rows.length;if(!n||rows.some(r=>r.length!==n||r.some(isNaN))){toast('La matriz debe ser cuadrada y solo con números');return;}
+      for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(rows[i][j]!==rows[j][i]){toast('La matriz debe ser simétrica (grafo no dirigido)');return;}
+      let names=v.names.split(',').map(s=>s.trim()).filter(Boolean);if(names.length!==n)names=[...Array(n)].map((_,i)=>LETTERS[i]||'V'+(i+1));
+      snapshot();G={nodes:[],edges:[],nid:1,eid:1};
+      names.forEach((nmv,i)=>{const a=-Math.PI/2+2*Math.PI*i/n;G.nodes.push({id:G.nid++,name:nmv,x:Math.round(500+230*Math.cos(a)),y:Math.round(280+220*Math.sin(a))});});
+      for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(rows[i][j]){const w=rows[i][j]===1?null:rows[i][j];G.edges.push({id:G.eid++,a:i+1,b:j+1,label:'e'+(G.edges.length+1),w});}
+      hl=null;commit();setMode('move');toast('Grafo creado: arrastra los vértices para acomodarlos');},'Crear grafo');},
+  showAdj(){if(!need(1))return;const o=order(),names=o.map(nm);
+    out.innerHTML=matrix('Matriz de adyacencia',names,names,(i,j)=>findEdge(o[i],o[j])?1:0,{corner:'Mₐ',rowSum:true})+
+      `<p>La suma de cada fila es el grado del vértice. Σ grados = ${G.edges.length*2} = 2|E|.</p>`;},
+  showInc(){if(!need(1))return;const o=order(),es=G.edges;
+    out.innerHTML=matrix('Matriz de incidencia',o.map(nm),es.map(e=>e.label||('{'+nm(e.a)+','+nm(e.b)+'}')),(i,j)=>(es[j].a===o[i]||es[j].b===o[i])?1:0,{corner:'Mᵢ',rowSum:true,colSum:true})+
+      `<p>Cada columna suma 2 (los dos extremos de la arista) y cada fila suma el grado del vértice.</p>`;},
+  showW(){if(!need(1))return;const o=order(),names=o.map(nm);
+    out.innerHTML=matrix('Matriz de pesos',names,names,(i,j)=>{if(i===j)return 0;const e=findEdge(o[i],o[j]);return e?(e.w??1):'∞';},{corner:'W'})+
+      `<p>0 en la diagonal, ∞ cuando no hay conexión directa.${hasW()?'':' Las aristas sin peso cuentan como 1.'}</p>`;},
+  showDeg(){if(!need(1))return;const d=degrees(),o=order(),s=o.reduce((a,id)=>a+d[id],0);
+    out.innerHTML=`<h2>Grados de los vértices</h2><div class="tblwrap"><table><tr><th>Vértice</th><th>Aristas incidentes</th><th>Grado</th></tr>`+
+      o.map(id=>`<tr><th>${nm(id)}</th><td style="text-align:left">${G.edges.filter(e=>e.a===id||e.b===id).map(e=>`${e.label||''} {${nm(e.a)}, ${nm(e.b)}}`).join(', ')}</td><td class="one">${d[id]}</td></tr>`).join('')+
+      `<tr><th class="sum">Suma</th><td class="sum"></td><td class="sum">${s}</td></tr></table></div><p>Σ d(v) = ${s} = 2 × ${G.edges.length} = 2|E|</p>`;},
+  hamPath(){if(!need(2))return;const r=hamilton(false);hl=r.length?{seq:r[0],trail:false}:null;draw();
+    out.innerHTML=`<h2>Camino de Hamilton</h2>`+(r.length?`<span class="verdict ok">✓ Existe</span><div class="seq">${arrow(r[0])}</div><p>Visita los ${G.nodes.length} vértices exactamente una vez. Caminos de Hamilton encontrados: ${r.length/2}.</p>`:`<span class="verdict no">✗ No existe</span><p>La búsqueda exhaustiva con retroceso no encontró ninguna secuencia que visite todos los vértices una sola vez.</p>`);},
+  hamCycle(){if(!need(3))return;const r=hamilton(true);hl=r.length?{seq:r[0],trail:false}:null;draw();
+    out.innerHTML=`<h2>Circuito de Hamilton</h2>`+(r.length?`<span class="verdict ok">✓ Existe</span><div class="seq">${arrow(r[0])}</div><p>Visita cada vértice una vez y regresa al inicial. Circuitos distintos encontrados: ${r.length/2}.</p>`:`<span class="verdict no">✗ No existe</span><p>La búsqueda exhaustiva no encontró ningún circuito que visite todos los vértices una sola vez.</p>`);},
+  eulerPath(){euler(false);}, eulerCycle(){euler(true);},
+  dijkstra(){if(!need(2))return;const names=order().map(nm);
+    ask('Ruta de costo mínimo (Dijkstra)',[{id:'s',label:'Origen',type:'select',options:names,value:names[0]},{id:'t',label:'Destino',type:'select',options:names,value:names[names.length-1]}],v=>{
+      const s=G.nodes.find(n=>n.name===v.s).id,t=G.nodes.find(n=>n.name===v.t).id,o=order(),A=adjList();
+      const dist={},prev={},done=new Set(),rows=[];o.forEach(id=>{dist[id]=Infinity;prev[id]=null;});dist[s]=0;
+      while(done.size<o.length){let u=null;for(const id of o)if(!done.has(id)&&(u==null||dist[id]<dist[u]))u=id;if(dist[u]===Infinity)break;done.add(u);
+        for(const {to,e} of A[u]){const w=e.w??1;if(!done.has(to)&&dist[u]+w<dist[to]){dist[to]=dist[u]+w;prev[to]=u;}}
+        rows.push({u,d:dist[u],snap:o.map(id=>done.has(id)?'':(dist[id]===Infinity?'∞':dist[id]+'/'+nm(prev[id])))});}
+      if(dist[t]===Infinity){hl=null;draw();out.innerHTML=`<h2>Ruta de costo mínimo</h2><span class="verdict no">✗ No hay ruta</span>`;return;}
+      const path=[];for(let x=t;x!=null;x=prev[x])path.unshift(x);hl={seq:path,trail:false};draw();
+      const parts=path.slice(0,-1).map((x,i)=>findEdge(x,path[i+1]).w??1);
+      out.innerHTML=`<h2>Ruta de costo mínimo de ${nm(s)} a ${nm(t)}</h2><span class="verdict ok">✓ Costo mínimo: ${dist[t]}</span><div class="seq">${arrow(path)}</div><p>${parts.join(' + ')} = <strong>${dist[t]}</strong></p>`+
+        `<h2 style="margin-top:10px">Iteraciones (costo acumulado / predecesor)</h2><div class="tblwrap"><table><tr><th>It.</th><th>Fijado</th>${o.map(id=>`<th>${nm(id)}</th>`).join('')}</tr>`+
+        rows.map((r,i)=>`<tr><td>${i}</td><td class="one">${nm(r.u)} (${r.d})</td>${r.snap.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')+'</table></div>';},'Calcular');},
+  hamThrough(){if(!need(3))return;const names=order().map(nm);
+    ask('Circuito de Hamilton de costo mínimo',[{id:'s',label:'Inicia y termina en',type:'select',options:names,value:names[0]},{id:'p',label:'Debe pasar por',type:'select',options:names,value:names[1]}],v=>{
+      const s=G.nodes.find(n=>n.name===v.s).id,p=G.nodes.find(n=>n.name===v.p).id;
+      const all=hamilton(true,s).filter(c=>c.includes(p));const seen=new Set(),uniq=[];
+      all.forEach(c=>{const k=c.slice(1,-1).join(),rk=[...c.slice(1,-1)].reverse().join();if(!seen.has(rk)){seen.add(k);uniq.push(c);}});
+      uniq.sort((a,b)=>cost(a)-cost(b));
+      if(!uniq.length){hl=null;draw();out.innerHTML=`<h2>Circuito de Hamilton</h2><span class="verdict no">✗ No existe</span>`;return;}
+      hl={seq:uniq[0],trail:false};draw();
+      out.innerHTML=`<h2>Circuito de Hamilton desde ${v.s} pasando por ${v.p}</h2><span class="verdict ok">✓ Existe</span><div class="seq">${arrow(uniq[0])}</div><p>Costo: <strong>${cost(uniq[0])}</strong></p><p>Todas las opciones encontradas:</p><ul>${uniq.map(c=>`<li><span style="font-family:var(--f-mono)">${arrow(c)}</span> = ${cost(c)}</li>`).join('')}</ul>`;},'Calcular');},
+  clearHl(){hl=null;draw();out.innerHTML='';}
+};
+function euler(closed){if(!need(2))return;const d=degrees(),odd=order().filter(id=>d[id]%2),conn=connected();
+  let seq=null;const thm=closed?(conn&&odd.length===0):(conn&&(odd.length===0||odd.length===2));
+  if(thm){const starts=closed?order():(odd.length===2?[odd[0]]:order());for(const s of starts){seq=eulerSearch(s,closed);if(seq)break;}}
+  hl=seq?{seq,trail:true}:null;draw();
+  const oddTxt=odd.length?odd.map(id=>`${nm(id)} (${d[id]})`).join(', '):'ninguno';
+  out.innerHTML=`<h2>${closed?'Circuito':'Camino'} de Euler</h2>`+(seq?`<span class="verdict ok">✓ Existe</span><div class="seq">${arrow(seq)}</div><p>Usa las ${G.edges.length} aristas exactamente una vez.</p>`:`<span class="verdict no">✗ No existe</span>`)+
+    `<p>Grafo conexo: <strong>${conn?'sí':'no'}</strong>. Vértices de grado impar: <strong>${oddTxt}</strong>.</p>`+
+    `<p>${closed?'Un grafo conexo tiene circuito de Euler si y solo si todos sus vértices tienen grado par.':'Un grafo conexo tiene camino de Euler si y solo si tiene 0 o 2 vértices de grado impar (el camino va de uno al otro).'}</p><p>Grados: ${degLine()}</p>`;}
+
+// arranque
+load(); setMode('move'); draw();
+</script>
+
+</body>
+</html>
